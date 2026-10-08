@@ -41,6 +41,19 @@ than a heuristic" is a hard rule in the project, not a suggestion.
 
 ---
 
+## Screenshots
+
+The static dashboard that reads from this pipeline's data (not included in this repo — see
+"What's not here" below):
+
+| Bargain scouting | My squad |
+|---|---|
+| ![Chollos](docs/screenshots/chollos.jpg) | ![Mi plantilla](docs/screenshots/mi-plantilla.jpg) |
+
+| Rival activity feed | Player value stats |
+|---|---|
+| ![Rivales](docs/screenshots/rivales.jpg) | ![Estadísticas](docs/screenshots/estadisticas.jpg) |
+
 ## Why not the official app
 
 The game's official mobile app has its own private API. A time-boxed reconnaissance session
@@ -118,9 +131,12 @@ production they're scheduled by the included GitHub Actions workflow.
 
 - The API reconnaissance findings and the private API's endpoints — deliberately excluded (see
   "Why not the official app").
-- The web dashboard and the retired Streamlit app — front-end code, not the focus of this extract.
-- Any league-specific data: team badges, a live deployment URL, or real opponents' data. The
-  code works on generic `manager`/team identifiers; no real person's data is in this repo.
+- The web dashboard's source code and the retired Streamlit app — front-end code, not the focus
+  of this extract (the screenshots above show the dashboard; its code isn't published here).
+- The live deployment URL and team badge assets.
+
+The screenshots do show real data from my own private league (first names of friends I play
+against, my own squad and balance) — nothing sensitive, just a casual game among friends.
 
 ## License
 
