@@ -1,24 +1,23 @@
-"""Backfill único: resultados completos de LaLiga 2025/26, para que el
-historial de enfrentamientos directos (H2H) tenga con qué trabajar desde
-el primer día de la temporada 2026/27 — con 0-3 jornadas jugadas de la
-temporada nueva, casi ningún par de equipos se ha visto las caras todavía.
+"""One-off backfill: complete LaLiga 2025/26 results, so the head-to-head
+history has something to work with from day one of the 2026/27 season —
+with 0-3 matchdays played in the new season, almost no pair of teams has
+faced each other yet.
 
-No es un scraper que se ejecute a diario: es un dato histórico fijo. Se
-añade a `calendario_resultados` (misma pestaña que `scraper_calendario`,
-con temporada="2025/26") sin pisar los partidos de la temporada actual —
-tanto este script como `scraper_calendario` releen lo ya guardado y solo
-reemplazan las filas de su propia temporada antes de escribir, así que
-pueden ejecutarse en cualquier orden sin que uno borre el trabajo del
-otro.
+Not a scraper that runs daily: it's a fixed historical fact. Added to
+`calendario_resultados` (the same tab `scraper_calendario` writes to, with
+temporada="2025/26") without overwriting the current season's matches —
+both this script and `scraper_calendario` re-read what's already stored and
+only replace their own season's rows before writing, so they can run in
+any order without one erasing the other's work.
 
-No se conoce la jornada real de cada partido (la fuente es una matriz de
-resultados, no un calendario cronológico), así que se guarda `jornada=0`
-— sirve igual para el historial de enfrentamientos (no depende del orden
-dentro de la temporada), pero no se usa para "racha reciente" de un
-equipo (esa función mira solo la temporada más reciente de cada equipo).
+The real matchday for each match isn't known (the source is a results
+matrix, not a chronological schedule), so `jornada=0` is stored — that's
+fine for the head-to-head history (it doesn't depend on in-season order),
+but it isn't used for a team's "recent form" (that function only looks at
+each team's most recent season).
 
-Fuente: https://en.wikipedia.org/wiki/2025%E2%80%9326_La_Liga (tabla de
-resultados, temporada ya concluida).
+Source: https://en.wikipedia.org/wiki/2025%E2%80%9326_La_Liga (results
+table, season already finished).
 """
 from __future__ import annotations
 
@@ -26,9 +25,9 @@ import re
 
 TEMPORADA = "2025/26"
 
-# "Local X-Y Visitante" — una línea por partido, 380 en total (20 equipos,
-# doble vuelta). Nombres tal cual los da la fuente (Wikipedia); se
-# normalizan a la nomenclatura corta de futbolfantasy.com en ALIAS.
+# "Home X-Y Away" — one line per match, 380 total (20 teams, home and away).
+# Names exactly as the source (Wikipedia) gives them; normalized to
+# futbolfantasy.com's short naming in ALIAS.
 RESULTADOS_TEXTO = """
 Alavés 2-4 Athletic Bilbao
 Alavés 1-1 Atlético Madrid
@@ -412,8 +411,8 @@ Villarreal 2-3 Sevilla
 Villarreal 2-1 Valencia
 """.strip()
 
-# Wikipedia usa el nombre largo/oficial; el resto del proyecto (y
-# calendario_resultados de esta temporada) usa el corto de futbolfantasy.
+# Wikipedia uses the long/official name; the rest of the project (and this
+# season's calendario_resultados) uses futbolfantasy's short one.
 ALIAS = {
     "Atlético Madrid": "Atlético",
     "Athletic Bilbao": "Athletic",
@@ -438,7 +437,7 @@ def parsear_resultados() -> list[list]:
             continue
         m = PATRON_LINEA.match(linea)
         if not m:
-            raise ValueError(f"Línea con formato inesperado: {linea!r}")
+            raise ValueError(f"Unexpected line format: {linea!r}")
         local, goles_local, goles_visitante, visitante = m.groups()
         filas.append([TEMPORADA, 0, "", _alias(local), _alias(visitante), int(goles_local), int(goles_visitante), "si"])
     return filas
@@ -451,11 +450,11 @@ def main() -> None:
         [f.get("temporada"), f.get("jornada"), f.get("fecha"), f.get("equipo_local"), f.get("equipo_visitante"),
          f.get("goles_local"), f.get("goles_visitante"), f.get("jugado")]
         for f in leer_calendario_resultados()
-        if f.get("temporada") != TEMPORADA  # evita duplicar si se relanza
+        if f.get("temporada") != TEMPORADA  # avoids duplicating on re-run
     ]
     nuevas = parsear_resultados()
     sobrescribir_calendario_resultados(actuales + nuevas)
-    print(f"OK: {len(nuevas)} partidos de {TEMPORADA} añadidos a calendario_resultados ({len(actuales) + len(nuevas)} filas en total).")
+    print(f"OK: {len(nuevas)} matches from {TEMPORADA} added to calendario_resultados ({len(actuales) + len(nuevas)} rows total).")
 
 
 if __name__ == "__main__":

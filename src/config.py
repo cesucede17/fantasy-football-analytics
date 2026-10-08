@@ -1,4 +1,4 @@
-"""Carga de configuración desde .env (local) o variables de entorno (CI)."""
+"""Load configuration from .env (local) or environment variables (CI)."""
 import os
 from dotenv import load_dotenv
 

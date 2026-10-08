@@ -1,25 +1,25 @@
-"""Contexto de enfrentamiento y estimación heurística de probabilidad de
-victoria para decidir el once titular.
+"""Matchup context and heuristic win-probability estimate for lineup
+decisions.
 
-Aviso importante, para no perderlo de vista: esto es una heurística de
-ponderación manual, NO un modelo estadístico validado. Se construye con
-cero partidos observados de la temporada 2026/27 en el momento de escribir
-esto — el usuario pidió explícitamente saltarse la regla de CLAUDE.md de
-"nada de ML antes de fase 4" sabiendo que el número no está calibrado con
-datos reales. Por eso `estimar_probabilidad_victoria` siempre devuelve el
-desglose completo (`motivo`), no solo el porcentaje: el valor no es la
-verdad, es un resumen legible de las señales que ya tenías dispersas.
+Important disclaimer, not to be lost sight of: this is a manually-weighted
+heuristic, NOT a validated statistical model. It's built with zero observed
+matches of the 2026/27 season at the time of writing — the user explicitly
+asked to skip the project's "no ML before Phase 4" rule knowing the number
+isn't calibrated against real data. That's why `estimar_probabilidad_victoria`
+always returns the full breakdown (`motivo`), not just the percentage: the
+value isn't ground truth, it's a readable summary of signals you already had
+scattered around.
 
-Señales usadas, todas con datos reales (nada inventado salvo los pesos):
-- Historial de enfrentamientos directos (últimos 5, en cualquier
-  temporada — calendario_resultados no se filtra por año).
-- Localía.
-- Racha reciente de cada equipo (últimos 5 partidos, cualquier rival).
-- Posición en la tabla: la de esta temporada si ya hay partidos jugados
-  suficientes, si no la de la temporada anterior (clasificacion_anterior)
-  como arranque — ver `tabla_posiciones`.
-- Bajas: jugadores con lesión/sanción activa (estado_jugadores) que están
-  entre los de más valor de mercado de su equipo.
+Signals used, all backed by real data (nothing invented except the weights):
+- Head-to-head history (last 5, across any season — calendario_resultados
+  isn't filtered by year).
+- Home advantage.
+- Each team's recent form (last 5 matches, any opponent).
+- League position: this season's if enough matches have been played, else
+  last season's (clasificacion_anterior) as a starting point — see
+  `tabla_posiciones`.
+- Absences: players with an active injury/suspension (estado_jugadores)
+  who rank among their team's highest market value.
 """
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ from dataclasses import dataclass, field
 from src.textutil import normalizar
 
 N_PARTIDOS_FORMA = 5
-MIN_JORNADAS_PARA_TABLA_ACTUAL = 3  # por debajo de esto, se usa la tabla de la temporada anterior
-N_BAJAS_IMPORTANTES = 3  # cuántos jugadores de más valor del rival se miran para lesiones/sanciones
+MIN_JORNADAS_PARA_TABLA_ACTUAL = 3  # below this, fall back to last season's table
+N_BAJAS_IMPORTANTES = 3  # how many of the rival's highest-value players are checked for injuries/suspensions
 
 
 def _eq(nombre: str) -> str:
@@ -51,15 +51,15 @@ def _partidos_jugados(calendario: list[dict]) -> list[dict]:
 
 
 def _orden_desc(partidos: list[dict]) -> list[dict]:
-    """Más reciente primero. calendario_resultados no siempre tiene fecha
-    (los partidos ya jugados solo traen jornada), así que se ordena por
-    (temporada, jornada) en vez de por fecha real."""
+    """Most recent first. calendario_resultados doesn't always have a date
+    (matches already played only carry a matchday number), so it's sorted
+    by (season, matchday) instead of a real date."""
     return sorted(partidos, key=lambda p: (str(p.get("temporada", "")), _int_o_none(p.get("jornada")) or 0), reverse=True)
 
 
 def historial_h2h(equipo_a: str, equipo_b: str, calendario: list[dict], n: int = N_PARTIDOS_FORMA) -> list[dict]:
-    """Últimos n enfrentamientos directos entre dos equipos, en cualquier
-    temporada, más reciente primero."""
+    """Last n head-to-head matches between two teams, across any season,
+    most recent first."""
     a, b = _eq(equipo_a), _eq(equipo_b)
     jugados = _partidos_jugados(calendario)
     entre_ambos = [
@@ -97,13 +97,13 @@ def resumen_h2h(equipo_a: str, equipo_b: str, calendario: list[dict], n: int = N
 
 
 def racha_reciente(equipo: str, calendario: list[dict], n: int = N_PARTIDOS_FORMA) -> str:
-    """'VVEDV' (más reciente primero) con los últimos n partidos del
-    equipo, cualquier rival. Solo mira la temporada más reciente en la que
-    el equipo tiene partidos: el histórico de temporadas pasadas
-    (backfill_historico_h2h) no trae jornada real, así que mezclarlo
-    daría un orden arbitrario dentro de esa temporada — aquí interesa el
-    orden real, no solo relleno. Al principio de temporada esto significa
-    una racha más corta que n, no una inventada."""
+    """'WWDLW' (most recent first) for the team's last n matches, any
+    opponent. Only looks at the most recent season the team has matches in:
+    the historical backfill from past seasons (backfill_historico_h2h)
+    doesn't carry a real matchday number, so mixing it in would give an
+    arbitrary order within that season — here the real order matters, not
+    just padding the count. Early in a season this means a shorter streak
+    than n, not a made-up one."""
     eq = _eq(equipo)
     jugados = [
         p for p in _partidos_jugados(calendario)
@@ -120,16 +120,16 @@ def racha_reciente(equipo: str, calendario: list[dict], n: int = N_PARTIDOS_FORM
             continue
         local_es_eq = _eq(p.get("equipo_local", "")) == eq
         goles_eq, goles_rival = (gl, gv) if local_es_eq else (gv, gl)
-        letras.append("V" if goles_eq > goles_rival else "D" if goles_eq < goles_rival else "E")
+        letras.append("W" if goles_eq > goles_rival else "L" if goles_eq < goles_rival else "D")
     return "".join(letras)
 
 
 def _puntos_racha(racha: str) -> int:
-    return sum(3 if c == "V" else 1 if c == "E" else 0 for c in racha)
+    return sum(3 if c == "W" else 1 if c == "D" else 0 for c in racha)
 
 
 def proximo_partido(equipo: str, calendario: list[dict]) -> dict | None:
-    """Primer partido sin jugar del equipo, por jornada ascendente."""
+    """Team's first unplayed match, by ascending matchday."""
     eq = _eq(equipo)
     pendientes = [
         p for p in calendario
@@ -142,11 +142,11 @@ def proximo_partido(equipo: str, calendario: list[dict]) -> dict | None:
 
 
 def tabla_posiciones(calendario: list[dict], clasificacion_anterior: list[dict]) -> dict[str, int]:
-    """Posición de cada equipo: la de esta temporada si ya se jugaron
-    suficientes jornadas (>= MIN_JORNADAS_PARA_TABLA_ACTUAL), si no la de
-    la temporada anterior como arranque. Un equipo recién ascendido que no
-    esté en la tabla anterior no aparece — tratarlo como "sin dato", no
-    como aviso de que juega mal."""
+    """Each team's position: this season's once enough matchdays have been
+    played (>= MIN_JORNADAS_PARA_TABLA_ACTUAL), else last season's as a
+    starting point. A newly promoted team absent from last season's table
+    simply doesn't appear — treat that as "no data", not as a signal that
+    it's playing badly."""
     jugados = _partidos_jugados(calendario)
     jornadas_jugadas = len({_int_o_none(p.get("jornada")) for p in jugados if p.get("jornada")})
 
@@ -185,9 +185,9 @@ def tabla_posiciones(calendario: list[dict], clasificacion_anterior: list[dict])
 def jugadores_lesionados_equipo(
     equipo: str, estado_jugadores: list[dict], precios_diarios: list[dict], n: int = N_BAJAS_IMPORTANTES
 ) -> list[str]:
-    """Bajas activas (lesión o sanción) del equipo, priorizando a los de
-    más valor de mercado — proxy de "jugador importante" sin tener que
-    pedirle al usuario que lo marque a mano."""
+    """Active absences (injury or suspension) for the team, prioritizing
+    the highest market-value players — a proxy for "important player"
+    without needing the user to flag it by hand."""
     eq = _eq(equipo)
     equipo_por_jugador: dict[str, str] = {}
     valor_por_jugador: dict[str, int] = {}
@@ -201,7 +201,7 @@ def jugadores_lesionados_equipo(
         if valor_actual > valor_por_jugador.get(clave, -1):
             valor_por_jugador[clave] = valor_actual
 
-    # última incidencia conocida por jugador (estado_jugadores es append-only)
+    # latest known incident per player (estado_jugadores is append-only)
     ultima_por_jugador: dict[str, dict] = {}
     for inc in estado_jugadores:
         jugador = inc.get("jugador")
@@ -223,10 +223,10 @@ def jugadores_lesionados_equipo(
 
 @dataclass
 class ResultadoProbabilidad:
-    """`motivo` lleva el desglose completo — no es solo el % final, porque
-    el % es una estimación heurística sin calibrar, ver docstring del
-    módulo. Enseñar el porqué es lo que hace que el usuario pueda
-    descartar la estimación si no le cuadra con lo que sabe."""
+    """`motivo` carries the full breakdown — not just the final %, because
+    the % is an uncalibrated heuristic estimate (see the module docstring).
+    Showing the reasoning is what lets the user discard the estimate when
+    it doesn't match what they already know."""
     prob_victoria_local: float
     prob_empate: float
     prob_victoria_visitante: float
@@ -241,14 +241,14 @@ def estimar_probabilidad_victoria(
     estado_jugadores: list[dict],
     precios_diarios: list[dict],
 ) -> ResultadoProbabilidad:
-    """Estimación heurística (no ML, no calibrada) de quién gana. Parte de
-    una base realista de fútbol (ventaja de local) y la desplaza según
-    enfrentamientos directos, racha, posición en la tabla y bajas — cada
-    señal con un tope máximo de influencia para que ninguna por sí sola
-    dispare el resultado a un extremo."""
+    """Heuristic (not ML, not calibrated) estimate of who wins. Starts from
+    a realistic football baseline (home advantage) and shifts it based on
+    head-to-head record, recent form, league position, and absences — each
+    signal capped so no single one alone can push the result to an
+    extreme."""
     motivo: list[str] = []
     base_local, base_empate, base_visitante = 45.0, 26.0, 29.0
-    desplazamiento = 0.0  # positivo = a favor del local
+    desplazamiento = 0.0  # positive = favors the home team
 
     h2h = resumen_h2h(equipo_local, equipo_visitante, calendario)
     n_h2h = h2h.victorias_equipo_a + h2h.empates + h2h.victorias_equipo_b
@@ -256,11 +256,11 @@ def estimar_probabilidad_victoria(
         ajuste_h2h = 15.0 * (h2h.victorias_equipo_a - h2h.victorias_equipo_b) / N_PARTIDOS_FORMA
         desplazamiento += ajuste_h2h
         motivo.append(
-            f"H2H últimos {n_h2h}: {h2h.victorias_equipo_a}V {h2h.empates}E {h2h.victorias_equipo_b}D "
-            f"a favor de {equipo_local} → {ajuste_h2h:+.1f} pts"
+            f"H2H last {n_h2h}: {h2h.victorias_equipo_a}W {h2h.empates}D {h2h.victorias_equipo_b}L "
+            f"in favor of {equipo_local} → {ajuste_h2h:+.1f} pts"
         )
     else:
-        motivo.append("Sin enfrentamientos directos registrados todavía → sin ajuste por H2H.")
+        motivo.append("No head-to-head matches recorded yet → no H2H adjustment.")
 
     racha_local = racha_reciente(equipo_local, calendario)
     racha_visitante = racha_reciente(equipo_visitante, calendario)
@@ -269,7 +269,7 @@ def estimar_probabilidad_victoria(
         ajuste_forma = 10.0 * diferencia_forma / 15.0
         desplazamiento += ajuste_forma
         motivo.append(
-            f"Racha: {equipo_local} {racha_local or 's/d'} vs {equipo_visitante} {racha_visitante or 's/d'} "
+            f"Form: {equipo_local} {racha_local or 'n/a'} vs {equipo_visitante} {racha_visitante or 'n/a'} "
             f"→ {ajuste_forma:+.1f} pts"
         )
 
@@ -278,19 +278,19 @@ def estimar_probabilidad_victoria(
     if pos_local is not None and pos_visitante is not None:
         ajuste_tabla = 10.0 * (pos_visitante - pos_local) / 19.0
         desplazamiento += ajuste_tabla
-        motivo.append(f"Tabla: {equipo_local} {pos_local}º vs {equipo_visitante} {pos_visitante}º → {ajuste_tabla:+.1f} pts")
+        motivo.append(f"Table: {equipo_local} {pos_local}th vs {equipo_visitante} {pos_visitante}th → {ajuste_tabla:+.1f} pts")
     else:
-        motivo.append("Posición en tabla no disponible para uno de los dos equipos → sin ajuste.")
+        motivo.append("League position unavailable for one of the two teams → no adjustment.")
 
     bajas_local = jugadores_lesionados_equipo(equipo_local, estado_jugadores, precios_diarios)
     bajas_visitante = jugadores_lesionados_equipo(equipo_visitante, estado_jugadores, precios_diarios)
     ajuste_bajas = -2.5 * len(bajas_local) + 2.5 * len(bajas_visitante)
     if bajas_local or bajas_visitante:
         desplazamiento += ajuste_bajas
-        detalle_local = ", ".join(bajas_local) if bajas_local else "ninguna detectada"
-        detalle_visitante = ", ".join(bajas_visitante) if bajas_visitante else "ninguna detectada"
+        detalle_local = ", ".join(bajas_local) if bajas_local else "none detected"
+        detalle_visitante = ", ".join(bajas_visitante) if bajas_visitante else "none detected"
         motivo.append(
-            f"Bajas de más valor — {equipo_local}: {detalle_local} · {equipo_visitante}: {detalle_visitante} "
+            f"Highest-value absences — {equipo_local}: {detalle_local} · {equipo_visitante}: {detalle_visitante} "
             f"→ {ajuste_bajas:+.1f} pts"
         )
 
@@ -301,5 +301,5 @@ def estimar_probabilidad_victoria(
     total = local + empate + visitante
     local, empate, visitante = 100 * local / total, 100 * empate / total, 100 * visitante / total
 
-    motivo.insert(0, f"Base de partida (ventaja de local, sin más datos): {base_local:.0f}%/{base_empate:.0f}%/{base_visitante:.0f}%.")
+    motivo.insert(0, f"Starting baseline (home advantage, no other data): {base_local:.0f}%/{base_empate:.0f}%/{base_visitante:.0f}%.")
     return ResultadoProbabilidad(round(local, 1), round(empate, 1), round(visitante, 1), motivo)

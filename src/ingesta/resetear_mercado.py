@@ -1,6 +1,6 @@
-"""Vacía `mercado_diario` cada día a las 22:00 (hora de Madrid), que es
-cuando LaLiga Fantasy abre un mercado nuevo. Sin esto, los jugadores de
-mercados ya cerrados se irían acumulando en la pestaña.
+"""Empties `mercado_diario` every day at 22:00 (Madrid time), which is when
+LaLiga Fantasy opens a new market. Without this, players from markets
+already closed would keep piling up in the tab.
 """
 from __future__ import annotations
 

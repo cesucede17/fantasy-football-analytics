@@ -1,12 +1,12 @@
-"""Lectura y escritura en Google Sheets vía gspread.
+"""Read/write access to Google Sheets via gspread.
 
-precios_diarios es append-only: nunca sobrescribir filas.
+precios_diarios is append-only: rows are never overwritten.
 
-Autenticación: cuenta de servicio de Google Cloud. Las credenciales llegan
-como JSON (contenido completo, no ruta de archivo) en la variable de entorno
-GOOGLE_CREDENTIALS_JSON — así funciona igual en local (.env) y en GitHub
-Actions (secret). La hoja debe compartirse con el email de esa cuenta de
-servicio (termina en @...iam.gserviceaccount.com) con permiso de Editor.
+Authentication: a Google Cloud service account. Credentials arrive as JSON
+(the full content, not a file path) in the GOOGLE_CREDENTIALS_JSON
+environment variable — so it works the same way locally (.env) and in
+GitHub Actions (secret). The sheet must be shared with that service
+account's email (ends in @...iam.gserviceaccount.com) with Editor access.
 """
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ SCOPES = [
 def _cliente() -> gspread.Client:
     if not GOOGLE_CREDENTIALS_JSON:
         raise RuntimeError(
-            "Falta GOOGLE_CREDENTIALS_JSON (contenido del JSON de la cuenta "
-            "de servicio, no una ruta de archivo)."
+            "GOOGLE_CREDENTIALS_JSON is missing (the service account's JSON "
+            "content, not a file path)."
         )
     info = json.loads(GOOGLE_CREDENTIALS_JSON)
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
@@ -35,15 +35,15 @@ def _cliente() -> gspread.Client:
 
 def _hoja(nombre_pestana: str):
     if not GOOGLE_SHEET_ID:
-        raise RuntimeError("Falta GOOGLE_SHEET_ID.")
+        raise RuntimeError("GOOGLE_SHEET_ID is missing.")
     return _cliente().open_by_key(GOOGLE_SHEET_ID).worksheet(nombre_pestana)
 
 
 def _hoja_o_crear(nombre_pestana: str, cabecera: list[str]):
-    """Como _hoja, pero crea la pestaña con su cabecera si todavía no
-    existe — para no obligar a crearla a mano en el Sheet."""
+    """Like _hoja, but creates the tab with its header if it doesn't exist
+    yet — so it doesn't have to be created by hand in the Sheet."""
     if not GOOGLE_SHEET_ID:
-        raise RuntimeError("Falta GOOGLE_SHEET_ID.")
+        raise RuntimeError("GOOGLE_SHEET_ID is missing.")
     libro = _cliente().open_by_key(GOOGLE_SHEET_ID)
     try:
         return libro.worksheet(nombre_pestana)
@@ -54,23 +54,23 @@ def _hoja_o_crear(nombre_pestana: str, cabecera: list[str]):
 
 
 def append_precios_diarios(filas: list[list]) -> None:
-    """Añade filas a `precios_diarios`. Nunca hace update ni overwrite."""
+    """Appends rows to `precios_diarios`. Never updates or overwrites."""
     if not filas:
         return
     _hoja("precios_diarios").append_rows(filas, value_input_option="USER_ENTERED")
 
 
 def append_estado_jugadores(filas: list[list]) -> None:
-    """Añade filas a `estado_jugadores` (lesiones/sanciones). Append-only."""
+    """Appends rows to `estado_jugadores` (injuries/suspensions). Append-only."""
     if not filas:
         return
     _hoja("estado_jugadores").append_rows(filas, value_input_option="USER_ENTERED")
 
 
 def sobrescribir_estado_forma(filas: list[list]) -> None:
-    """Reemplaza por completo `estado_forma`: es una foto del estado actual
-    de los jugadores seguidos, no un histórico — a diferencia de las pestañas
-    append-only, aquí interesa solo el dato más reciente."""
+    """Fully replaces `estado_forma`: it's a snapshot of the tracked
+    players' current status, not a history — unlike the append-only tabs,
+    only the most recent value matters here."""
     hoja = _hoja("estado_forma")
     hoja.clear()
     cabecera = ["fecha", "jugador", "disponibilidad", "titular_jornada", "titular_probabilidad", "riesgo_lesion", "jerarquia"]
@@ -87,9 +87,9 @@ def _asegurar_columna(nombre_pestana: str, columna: str) -> None:
 
 
 def actualizar_titulares_mi_plantilla(nombres_titulares: set[str]) -> None:
-    """Marca qué jugadores de mi_plantilla son titulares en la alineación
-    actual. El resto queda como banquillo. Se guarda en una columna
-    `titular`, añadida a la pestaña la primera vez que se usa esto."""
+    """Marks which players in mi_plantilla are in the current starting
+    lineup. The rest are treated as bench. Stored in a `titular` column,
+    added to the tab the first time this is used."""
     _asegurar_columna("mi_plantilla", "titular")
     hoja = _hoja("mi_plantilla")
     valores = hoja.get_all_values()
@@ -111,7 +111,7 @@ def agregar_a_mi_plantilla(jugador: str, precio_compra: float, clausula: float, 
 
 def eliminar_de_mi_plantilla(jugador: str) -> None:
     hoja = _hoja("mi_plantilla")
-    valores = hoja.col_values(1)  # columna "jugador"
+    valores = hoja.col_values(1)  # "jugador" column
     for i, nombre in enumerate(valores, start=1):
         if nombre == jugador:
             hoja.delete_rows(i)
@@ -137,9 +137,9 @@ def eliminar_de_mercado_diario(jugador: str) -> None:
 
 
 def resetear_mercado_diario() -> None:
-    """Vacía mercado_diario entero, conservando la cabecera. El mercado real
-    de LaLiga Fantasy rota cada día a las 22:00 — sin esto, los jugadores de
-    mercados ya cerrados se quedarían acumulados."""
+    """Empties mercado_diario entirely, keeping the header. LaLiga
+    Fantasy's real market rotates every day at 22:00 — without this,
+    players from already-closed markets would keep piling up."""
     hoja = _hoja("mercado_diario")
     cabecera = hoja.row_values(1)
     hoja.clear()
@@ -177,7 +177,7 @@ def leer_plantillas_rivales() -> list[dict]:
 
 
 def leer_hoja(nombre_pestana: str) -> list[dict]:
-    """Lee una pestaña entera como lista de diccionarios (fila 1 = cabeceras)."""
+    """Reads a whole tab as a list of dicts (row 1 = headers)."""
     return _hoja(nombre_pestana).get_all_records()
 
 
@@ -213,10 +213,10 @@ CABECERA_PUNTOS_JORNADA = ["jornada", "jugador", "puntos"]
 
 
 def append_puntos_jornada(filas: list[list]) -> None:
-    """Añade filas a `puntos_jornada`. Append-only, como precios_diarios:
-    cada jornada jugada es un hecho histórico que no cambia. El scraper
-    (scraper_perfil) es responsable de no volver a mandar una jornada ya
-    guardada para ese jugador — aquí no se hace dedup."""
+    """Appends rows to `puntos_jornada`. Append-only, like precios_diarios:
+    a played matchday is a historical fact that doesn't change. The scraper
+    (scraper_perfil) is responsible for not resending a matchday already
+    stored for that player — no dedup happens here."""
     if not filas:
         return
     _hoja_o_crear("puntos_jornada", CABECERA_PUNTOS_JORNADA).append_rows(filas, value_input_option="USER_ENTERED")
@@ -236,10 +236,10 @@ CABECERA_CALENDARIO = [
 
 
 def sobrescribir_calendario_resultados(filas: list[list]) -> None:
-    """Reemplaza por completo `calendario_resultados`: cada pasada trae el
-    calendario entero (jugados y por jugar), así que no tiene sentido
-    acumular — solo interesa la foto más reciente, con los resultados que
-    se van cerrando."""
+    """Fully replaces `calendario_resultados`: every pass brings the whole
+    schedule (played and upcoming), so accumulating makes no sense — only
+    the most recent snapshot matters, with results being settled as they
+    happen."""
     hoja = _hoja_o_crear("calendario_resultados", CABECERA_CALENDARIO)
     hoja.clear()
     hoja.append_row(CABECERA_CALENDARIO, value_input_option="USER_ENTERED")
@@ -258,10 +258,9 @@ CABECERA_CLASIFICACION_ANTERIOR = ["equipo", "posicion", "temporada"]
 
 
 def sobrescribir_clasificacion_anterior(filas: list[list]) -> None:
-    """Clasificación final de la temporada pasada. Dato estático de
-    referencia (no se re-scrapea): sirve de punto de partida al inicio de
-    temporada, cuando todavía no hay partidos jugados con los que calcular
-    una clasificación real."""
+    """Last season's final standings. Static reference data (never
+    re-scraped): a starting point at the beginning of a season, while there
+    aren't yet enough played matches to compute a real table."""
     hoja = _hoja_o_crear("clasificacion_anterior", CABECERA_CLASIFICACION_ANTERIOR)
     hoja.clear()
     hoja.append_row(CABECERA_CLASIFICACION_ANTERIOR, value_input_option="USER_ENTERED")
@@ -283,22 +282,23 @@ CABECERA_POOL_PUNTOS = [
 
 
 def sobrescribir_pool_puntos(filas: list[list]) -> None:
-    """Puntos de LaLiga Fantasy Oficial del pool entero (scraper_puntos_pool),
-    base para el scouting de chollos. Foto del estado actual, no histórico
-    (a diferencia de puntos_jornada): cada pasada sobrescribe la pestaña
-    entera, igual que estado_forma.
+    """Official LaLiga Fantasy points for the entire pool (scraper_puntos_pool),
+    the base data for bargain scouting. A snapshot of current status, not a
+    history (unlike puntos_jornada): every pass overwrites the whole tab,
+    same as estado_forma.
 
-    OJO al leer `media` de vuelta con leer_pool_puntos()/leer_hoja(): esta
-    hoja se escribe bien (Sheets guarda 4.33 de verdad), pero gspread lee
-    con get_all_records() en modo FORMATTED_VALUE + numericise propio, que
-    NO entiende el separador decimal español ("4,33" tal como lo muestra
-    la celda) — lo interpreta como millares y devuelve 433. Comprobado a
-    mano en la sesión donde se creó esto (ver docs/04-bitacora.md). No
-    afecta a la web (Apps Script lee con getValues(), sin este problema) ni
-    a nada que exista hoy en Python (nada lee `media` todavía). Si algún
-    día hace falta desde Python, recalcular como
-    `puntos_temporada / partidos_jugados` (ambos enteros, inmunes a esto)
-    en vez de confiar en la celda `media` tal cual."""
+    WATCH OUT when reading `media` back via leer_pool_puntos()/leer_hoja():
+    this sheet is written correctly (Sheets genuinely stores 4.33), but
+    gspread's get_all_records() reads in FORMATTED_VALUE mode with its own
+    numericise step, which does NOT understand the Spanish decimal
+    separator ("4,33" as the cell displays it) — it parses it as a
+    thousands separator and returns 433. Verified by hand in the session
+    where this was built (see docs/04-bitacora.md). Doesn't affect the web
+    dashboard (Apps Script reads with getValues(), unaffected by this) or
+    anything that exists in Python today (nothing reads `media` yet). If
+    it's ever needed from Python, recompute it as
+    `puntos_temporada / partidos_jugados` (both integers, immune to this)
+    instead of trusting the `media` cell as-is."""
     hoja = _hoja_o_crear("pool_puntos", CABECERA_POOL_PUNTOS)
     hoja.clear()
     hoja.append_row(CABECERA_POOL_PUNTOS, value_input_option="USER_ENTERED")
@@ -317,9 +317,8 @@ CABECERA_CHOLLOS_AVISADOS = ["fecha", "jugador", "posicion", "puntos_por_millon"
 
 
 def append_chollos_avisados(filas: list[list]) -> None:
-    """Dedup del aviso de chollos por Telegram (aviso_chollos.py): un
-    jugador solo se avisa una vez, para siempre — append-only, como
-    puntos_jornada."""
+    """Dedup for the Telegram bargain alert (aviso_chollos.py): a player is
+    only ever alerted once — append-only, like puntos_jornada."""
     if not filas:
         return
     _hoja_o_crear("chollos_avisados", CABECERA_CHOLLOS_AVISADOS).append_rows(filas, value_input_option="USER_ENTERED")
@@ -333,6 +332,6 @@ def leer_chollos_avisados() -> list[dict]:
 
 
 def leer_config() -> dict:
-    """La pestaña config es una sola fila de ajustes; se devuelve como dict plano."""
+    """The config tab is a single row of settings; returned as a plain dict."""
     filas = leer_hoja("config")
     return filas[0] if filas else {}

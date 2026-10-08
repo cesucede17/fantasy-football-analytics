@@ -1,15 +1,15 @@
-"""Avisa por Telegram de chollos nuevos que refuercen alguna posición de la
-plantilla — mismo criterio que "Refuerzos recomendados por posición" en la
-pestaña Chollos de la web (paso 4 del brainstorming, ver
-docs/04-bitacora.md). Pedido explícito del usuario: no quiere tener que
-entrar a mirar la web para enterarse.
+"""Alerts via Telegram about new bargains that would reinforce some squad
+position — same criteria as "Recommended reinforcements by position" in the
+web dashboard's Chollos tab (decision brainstorm step 4, see
+docs/04-bitacora.md). Explicit user request: didn't want to have to open
+the web dashboard just to find out.
 
-Depende de que `pool_puntos` ya esté actualizado hoy — va DESPUÉS de
-scraper_puntos_pool en el cron diario (ver ingesta-diaria.yml).
+Depends on `pool_puntos` already being updated for today — runs AFTER
+scraper_puntos_pool in the daily cron (see ingesta-diaria.yml).
 
-Cada jugador se avisa como mucho una vez en la vida (dedup en
-chollos_avisados, append-only) — sin esto, según baja de precio o sube de
-puntos el mercado, el mismo top-3 por posición se repetiría cada día.
+Each player is alerted at most once, ever (dedup via chollos_avisados,
+append-only) — without this, as the market's prices drop or points rise,
+the same top-3-per-position would repeat every day.
 """
 from __future__ import annotations
 
@@ -30,12 +30,12 @@ def main() -> None:
     try:
         pool = leer_pool_puntos()
         if not pool:
-            print("OK: pool_puntos todavía vacío, nada que avisar.")
+            print("OK: pool_puntos still empty, nothing to alert.")
             return
 
         precios = leer_hoja("precios_diarios")
         if not precios:
-            print("OK: precios_diarios todavía vacío, nada que avisar.")
+            print("OK: precios_diarios still empty, nothing to alert.")
             return
         fecha_max = max(f.get("fecha", "") for f in precios)
         snapshot = [f for f in precios if f.get("fecha") == fecha_max]
@@ -47,19 +47,19 @@ def main() -> None:
         nuevos = [c for c in top if normalizar(c.jugador) not in ya_avisados]
 
         if not nuevos:
-            print("OK: sin chollos nuevos hoy.")
+            print("OK: no new bargains today.")
             return
 
         lineas = [
             f"💎 {c.jugador} ({c.equipo}, {c.posicion}) — {c.puntos_por_millon:.1f} pts/M€, "
-            f"{c.puntos} puntos, {c.valor:,.0f}€".replace(",", ".")
+            f"{c.puntos} points, {c.valor:,.0f}€".replace(",", ".")
             for c in nuevos
         ]
-        enviar_mensaje("🔎 Chollos nuevos que podrían reforzar tu plantilla:\n\n" + "\n".join(lineas))
+        enviar_mensaje("🔎 New bargains that could reinforce your squad:\n\n" + "\n".join(lineas))
 
         hoy = dt.date.today().isoformat()
         append_chollos_avisados([[hoy, c.jugador, c.posicion, round(c.puntos_por_millon, 2)] for c in nuevos])
-        print(f"OK: avisados {len(nuevos)} chollos nuevos.")
+        print(f"OK: alerted {len(nuevos)} new bargains.")
     except Exception as err:
         notificar_fallo("aviso_chollos", err)
         raise

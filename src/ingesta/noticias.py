@@ -1,5 +1,5 @@
-"""Lesiones, sanciones y alineaciones probables.
+"""Injuries, suspensions, and probable lineups.
 
-Filtrar por plantilla y watchlist antes de alertar. El valor está en el hueco
-entre que se publica una molestia y el precio reacciona.
+Filter against the squad and watchlist before alerting. The value is in the
+gap between an issue being published and the price reacting to it.
 """

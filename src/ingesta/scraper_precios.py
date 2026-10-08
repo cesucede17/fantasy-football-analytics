@@ -1,17 +1,18 @@
-"""Scraping diario de valores de mercado desde webs públicas.
+"""Daily scraping of market values from public websites.
 
-Fuente de respaldo si la vía API no sale, y fuente principal de precios globales
-en cualquier caso.
+Fallback source if the API path doesn't pan out, and the main source of
+global prices either way.
 
-Reglas: una pasada al día, respetar robots.txt, user-agent identificable.
-Se guardan todos los jugadores del pool de futbolfantasy (~534) — es el pool
-ya filtrado a los relevantes para Fantasy, no los ~1.600 de LaLiga completa.
-Hace falta el roster completo para el buscador por equipo y el autocompletado.
+Rules: one pass per day, respect robots.txt, identifiable user-agent.
+Every player in the futbolfantasy pool is stored (~534) — that's already
+the pool filtered down to players relevant for Fantasy, not the full ~1,600
+across LaLiga. The full roster is needed for the by-team search and
+autocomplete.
 
-Fuente actual: futbolfantasy.com/analytics/laliga-fantasy/mercado. La página
-trae cada jugador como una fila `<tr class="elemento_jugador">` con todos los
-datos ya calculados (valor, diferencias en 1/7/14/30 días) como atributos
-data-*, en HTML servido por el servidor (sin necesidad de ejecutar JS).
+Current source: futbolfantasy.com/analytics/laliga-fantasy/mercado. The
+page returns each player as a `<tr class="elemento_jugador">` row with all
+the data already computed (value, 1/7/14/30-day deltas) as data-* attributes,
+in server-rendered HTML (no JS execution needed).
 """
 from __future__ import annotations
 
@@ -26,8 +27,8 @@ URL_MERCADO = "https://www.futbolfantasy.com/analytics/laliga-fantasy/mercado"
 URL_DETALLE_JUGADOR = "https://www.futbolfantasy.com/analytics/laliga-fantasy/mercado/detalle/{id}?perfil=1"
 
 USER_AGENT = (
-    "FantasyLaligaBot/1.0 (uso personal, 1 peticion/dia; "
-    "contacto: suelacesar17@gmail.com)"
+    "FantasyLaligaBot/1.0 (personal use, 1 request/day; "
+    "contact: suelacesar17@gmail.com)"
 )
 
 
@@ -41,7 +42,7 @@ class PrecioJugador:
     valor: int
     delta_1d: int
     delta_7d: int
-    puntos_acum: str = ""  # no disponible en esta fuente; se deja vacío
+    puntos_acum: str = ""  # not available from this source; left empty
 
 
 def _texto_equipo(fila) -> str:
@@ -72,19 +73,19 @@ def _entero(fila, atributo: str) -> int:
 
 
 def obtener_precios() -> list[PrecioJugador]:
-    """Descarga y parsea la página de mercado. Una petición, nada más."""
+    """Downloads and parses the market page. One request, nothing more."""
     resp = requests.get(URL_MERCADO, headers={"User-Agent": USER_AGENT}, timeout=30)
     resp.raise_for_status()
 
-    # requests asume Latin-1 si el servidor no declara charset en la cabecera;
-    # esta web es UTF-8 real. Pasar bytes crudos deja que BeautifulSoup lo
-    # detecte bien a partir del <meta charset> del propio HTML.
+    # requests assumes Latin-1 when the server doesn't declare a charset in
+    # the header; this site is actually UTF-8. Passing raw bytes lets
+    # BeautifulSoup detect it correctly from the HTML's own <meta charset>.
     soup = BeautifulSoup(resp.content, "lxml")
     filas = soup.select("tr.elemento_jugador")
     if not filas:
         raise RuntimeError(
-            "No se encontraron filas de jugadores — la web pudo haber cambiado "
-            "su estructura. Revisar scraper_precios.py."
+            "No player rows found — the site may have changed its "
+            "structure. Check scraper_precios.py."
         )
 
     fecha = dt.date.today().isoformat()
@@ -107,10 +108,10 @@ def obtener_precios() -> list[PrecioJugador]:
 
 
 def valor_historico_jugador(jugador_id: str, fecha_iso: str) -> int | None:
-    """Valor de mercado de un jugador en una fecha concreta, sacado del
-    histórico de 30 días que expone la ficha de mercado del jugador (no
-    aparece en la tabla general, solo en esta vista de detalle). Devuelve
-    None si la fecha cae fuera de esos 30 días o no se encuentra."""
+    """A player's market value on a specific date, taken from the 30-day
+    history exposed on the player's market detail page (not available in
+    the main table, only in this detail view). Returns None if the date
+    falls outside that 30-day window or isn't found."""
     try:
         resp = requests.get(
             URL_DETALLE_JUGADOR.format(id=jugador_id),
@@ -130,7 +131,7 @@ def valor_historico_jugador(jugador_id: str, fecha_iso: str) -> int | None:
 
 
 def a_filas(jugadores: list[PrecioJugador]) -> list[list]:
-    """Convierte a listas planas, en el orden de columnas de `precios_diarios`."""
+    """Converts to flat lists, in `precios_diarios`'s column order."""
     return [
         [j.fecha, j.jugador_id, j.nombre, j.equipo, j.posicion, j.valor, j.delta_1d, j.delta_7d, j.puntos_acum]
         for j in jugadores
@@ -144,8 +145,8 @@ def main() -> None:
     try:
         datos = obtener_precios()
         append_precios_diarios(a_filas(datos))
-        print(f"OK: {len(datos)} jugadores escritos en precios_diarios.")
-    except Exception as err:  # noqa: BLE001 — sí, capturamos todo: es el job diario.
+        print(f"OK: {len(datos)} players written to precios_diarios.")
+    except Exception as err:  # noqa: BLE001 — yes, we catch everything: it's the daily job.
         notificar_fallo("scraper_precios", err)
         raise
 

@@ -1,14 +1,13 @@
-"""Scraping diario del calendario completo de LaLiga (todas las jornadas,
-jugadas y por jugar) desde futbolfantasy.com.
+"""Daily scraping of LaLiga's full schedule (every matchday, played and
+upcoming) from futbolfantasy.com.
 
-A diferencia de precios_diarios (append-only), aquí interesa tener siempre
-la foto completa del calendario — con los resultados que se van cerrando
-cada jornada — así que se sobrescribe la pestaña entera cada día, igual que
-estado_forma.
+Unlike precios_diarios (append-only), here we always want the full current
+snapshot of the schedule — with results being settled matchday by matchday
+— so the whole tab is overwritten every day, same as estado_forma.
 
-Es la base de datos para el historial de enfrentamientos, la racha
-reciente y la clasificación actual que usa `src.analisis.enfrentamientos`.
-Sin resultados reales no hay con qué calcular nada de eso.
+This is the data backbone for the head-to-head history, recent form, and
+current league table used by `src.analisis.enfrentamientos`. Without real
+results there's nothing to compute any of that from.
 """
 from __future__ import annotations
 
@@ -21,8 +20,8 @@ from bs4 import BeautifulSoup
 URL_CALENDARIO = "https://www.futbolfantasy.com/laliga/calendario"
 
 USER_AGENT = (
-    "FantasyLaligaBot/1.0 (uso personal, 1 peticion/dia; "
-    "contacto: suelacesar17@gmail.com)"
+    "FantasyLaligaBot/1.0 (personal use, 1 request/day; "
+    "contact: suelacesar17@gmail.com)"
 )
 
 
@@ -62,7 +61,7 @@ def _fecha(el) -> str:
 
 
 def obtener_calendario() -> list[PartidoCalendario]:
-    """Descarga y parsea el calendario completo. Una petición, nada más."""
+    """Downloads and parses the full schedule. One request, nothing more."""
     resp = requests.get(URL_CALENDARIO, headers={"User-Agent": USER_AGENT}, timeout=30)
     resp.raise_for_status()
 
@@ -70,8 +69,8 @@ def obtener_calendario() -> list[PartidoCalendario]:
     seccion = soup.select_one("section.mod.lista.partidos")
     if seccion is None:
         raise RuntimeError(
-            "No se encontró la sección de partidos — la web pudo haber "
-            "cambiado su estructura. Revisar scraper_calendario.py."
+            "Matches section not found — the site may have changed its "
+            "structure. Check scraper_calendario.py."
         )
 
     temporada = _temporada(soup)
@@ -85,7 +84,7 @@ def obtener_calendario() -> list[PartidoCalendario]:
                 jornada_actual = int(m.group(1))
             continue
 
-        # el.name == "a" -> fila de partido
+        # el.name == "a" -> match row
         if "partido" not in (el.get("class") or []):
             continue
         local_img = el.select_one(".equipo.local img")
@@ -108,8 +107,8 @@ def obtener_calendario() -> list[PartidoCalendario]:
 
     if not partidos:
         raise RuntimeError(
-            "Se encontró la sección de partidos pero no se extrajo ningún "
-            "partido — revisar selectores en scraper_calendario.py."
+            "Matches section found but no match was extracted — check the "
+            "selectors in scraper_calendario.py."
         )
     return partidos
 
@@ -134,11 +133,10 @@ def main() -> None:
         partidos = obtener_calendario()
         temporada_actual = partidos[0].temporada if partidos else ""
 
-        # Esta pasada solo ve la temporada en curso — si se sobrescribiera
-        # sin más, se perdería el histórico de temporadas anteriores
-        # (backfill_historico_h2h.py) que usa el historial de
-        # enfrentamientos. Se conservan las filas de otras temporadas tal
-        # cual y se reemplazan solo las de esta.
+        # This pass only sees the current season — overwriting without care
+        # would lose the previous seasons' history (backfill_historico_h2h.py)
+        # that the head-to-head lookup relies on. Other seasons' rows are
+        # kept as-is and only this season's are replaced.
         otras_temporadas = [
             [f.get("temporada"), f.get("jornada"), f.get("fecha"), f.get("equipo_local"), f.get("equipo_visitante"),
              f.get("goles_local"), f.get("goles_visitante"), f.get("jugado")]
@@ -147,7 +145,7 @@ def main() -> None:
         ]
         sobrescribir_calendario_resultados(otras_temporadas + a_filas(partidos))
         jugados = sum(1 for p in partidos if p.jugado)
-        print(f"OK: {len(partidos)} partidos de {temporada_actual} ({jugados} jugados) guardados en calendario_resultados.")
+        print(f"OK: {len(partidos)} matches for {temporada_actual} ({jugados} played) saved to calendario_resultados.")
     except Exception as err:
         notificar_fallo("scraper_calendario", err)
         raise

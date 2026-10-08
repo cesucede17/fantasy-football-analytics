@@ -1,18 +1,19 @@
-"""Scouting de chollos externos — misma lógica y mismos umbrales que
-web/js/paginas/chollos.js (no es un puerto automático: si cambia la
-fórmula ahí, replicar el cambio aquí a mano). Existe por separado para
-poder avisar por Telegram sin depender de que el usuario abra la web. Ver
-docs/04-bitacora.md, paso 4 del brainstorming de decisión, para el porqué
-de la fuente (pool_puntos vía futbolfantasy.com, no Comuniate/Analítica
-Fantasy — puntúan Comunio/Biwenger, no LaLiga Fantasy Oficial).
+"""External bargain scouting — same logic and thresholds as
+web/js/paginas/chollos.js (not an automatic port: if the formula changes
+there, replicate the change here by hand). Exists separately so Telegram
+can alert without depending on the user opening the web dashboard. See
+docs/04-bitacora.md, decision brainstorm step 4, for why this particular
+source (pool_puntos via futbolfantasy.com, not Comuniate/Analítica
+Fantasy — those score for Comunio/Biwenger, not the official LaLiga
+Fantasy game).
 """
 from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
 
-MIN_PUNTOS = 4  # con menos, un jugador barato parece "eficientísimo" solo por muestra mínima
-TOP_POR_POSICION = 3  # igual que el panel "Refuerzos recomendados por posición" de la web
+MIN_PUNTOS = 4  # below this, a cheap player looks "hyper-efficient" purely from a tiny sample
+TOP_POR_POSICION = 3  # matches the "Recommended reinforcements by position" panel on the web
 ORDEN_LINEAS = ["Portero", "Defensa", "Mediocampista", "Delantero"]
 
 
@@ -63,10 +64,10 @@ def _con_puntos_por_millon(fila: dict, snapshot: list[dict]) -> Candidato | None
 
 
 def top_refuerzos_por_posicion(pool_puntos: list[dict], snapshot: list[dict], mi_plantilla: list[dict]) -> list[Candidato]:
-    """Los TOP_POR_POSICION candidatos externos por línea que mejoran al
-    peor jugador propio de esa línea — exactamente lo que ya muestra
-    "Refuerzos recomendados por posición" en la web, aquí en Python para
-    poder avisar por Telegram."""
+    """The TOP_POR_POSICION best external candidates per position that beat
+    my own worst player in that position — exactly what "Recommended
+    reinforcements by position" already shows on the web, reimplemented in
+    Python so it can trigger a Telegram alert."""
     nombres_propios = {normalizar(j.get("jugador", "")) for j in mi_plantilla}
 
     candidatos = []

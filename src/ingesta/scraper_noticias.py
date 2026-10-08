@@ -1,13 +1,13 @@
-"""Scraping diario de lesionados y sancionados desde futbolfantasy.com.
+"""Daily scraping of injuries and suspensions from futbolfantasy.com.
 
-Guarda una fila por incidencia activa cada día (append-only, igual que
-precios_diarios) y avisa por Telegram solo cuando la incidencia es nueva
-Y afecta a un jugador de mi_plantilla o watchlist — así no se spamea cada
-día con la misma lesión ya conocida.
+Stores one row per active incident each day (append-only, like
+precios_diarios) and alerts via Telegram only when the incident is new
+AND affects a player in mi_plantilla or the watchlist — so it doesn't spam
+the same already-known injury every day.
 
-Alineaciones probables queda pendiente: la web las separa por partido con
-URLs por jornada en vez de un listado único, hace falta otra pasada de
-reconocimiento para esa fuente.
+Probable lineups are still pending: the site splits them by match with
+per-matchday URLs instead of a single listing, so this source needs its own
+reconnaissance pass.
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ URL_LESIONADOS = "https://www.futbolfantasy.com/laliga/lesionados"
 URL_SANCIONADOS = "https://www.futbolfantasy.com/laliga/sancionados"
 
 USER_AGENT = (
-    "FantasyLaligaBot/1.0 (uso personal, 1 peticion/dia; "
-    "contacto: suelacesar17@gmail.com)"
+    "FantasyLaligaBot/1.0 (personal use, 1 request/day; "
+    "contact: suelacesar17@gmail.com)"
 )
 
 

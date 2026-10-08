@@ -1,27 +1,27 @@
-"""Estado de forma por jugador (disponibilidad, probabilidad de titularidad,
-riesgo de lesión, jerarquía) y puntos reales de LaLiga Fantasy por jornada
-jugada — ambos salen de la misma ficha individual del jugador, así que se
-scrapea una sola vez por jugador y se reparte en dos pestañas.
+"""Per-player form status (availability, starting-lineup probability,
+injury risk, squad hierarchy) and real LaLiga Fantasy points per matchday
+played — both come from the same individual player page, so it's scraped
+once per player and split across two tabs.
 
-A diferencia de scraper_precios (una página con todos los jugadores) y
-scraper_noticias (una página con todos los lesionados/sancionados), estos
-datos solo existen en la ficha individual de cada jugador — una URL por
-jugador. Por eso NO se scrapea el pool entero (~660 peticiones/día sería
-agresivo y rompe la regla de scraping de CLAUDE.md): solo se consulta a los
-jugadores en mi_plantilla, watchlist y mercado_diario, que son los que de
-verdad importan para decidir.
+Unlike scraper_precios (one page with every player) and scraper_noticias
+(one page with every injured/suspended player), this data only exists on
+each player's individual profile page — one URL per player. That's why the
+whole pool is NOT scraped (~660 requests/day would be aggressive and breaks
+the scraping rule in CLAUDE.md): only players in mi_plantilla, the
+watchlist, and mercado_diario are queried — the ones that actually matter
+for decisions.
 
-estado_forma no es append-only como precios_diarios: es una foto del estado
-actual, así que cada ejecución sobrescribe la pestaña entera (no interesa
-acumular histórico de jerarquía/riesgo día a día).
+estado_forma isn't append-only like precios_diarios: it's a snapshot of
+current status, so every run overwrites the whole tab (there's no value in
+accumulating a day-by-day history of hierarchy/risk).
 
-puntos_jornada SÍ es append-only (una jornada jugada es un hecho que no
-cambia) — pero la ficha del jugador siempre muestra el historial completo de
-jornadas jugadas hasta la fecha, así que cada pasada trae de nuevo jornadas
-ya guardadas. El propio scraper hace el dedup contra lo que ya hay en la
-pestaña antes de añadir nada. Efecto colateral útil: la primera vez que esto
-se ejecuta rellena solas todas las jornadas ya jugadas de la temporada, sin
-necesitar un backfill aparte.
+puntos_jornada IS append-only (a played matchday is a fact that doesn't
+change) — but the player's page always shows the full history of matchdays
+played to date, so every pass brings back matchdays already stored. The
+scraper itself dedupes against what's already in the tab before adding
+anything. Useful side effect: the first time this runs, it backfills every
+matchday already played in the season on its own, no separate backfill
+needed.
 """
 from __future__ import annotations
 
@@ -38,8 +38,8 @@ from src.textutil import slug
 URL_PERFIL = "https://www.futbolfantasy.com/jugadores/{slug}"
 
 USER_AGENT = (
-    "FantasyLaligaBot/1.0 (uso personal, 1 peticion/dia; "
-    "contacto: suelacesar17@gmail.com)"
+    "FantasyLaligaBot/1.0 (personal use, 1 request/day; "
+    "contact: suelacesar17@gmail.com)"
 )
 
 PAUSA_ENTRE_PETICIONES_SEGUNDOS = 1.5
@@ -69,8 +69,8 @@ def _texto(el, selector: str) -> str:
 
 
 def _cuadro_con_texto(soup: BeautifulSoup, pista: str):
-    """Los 'cuadros' de estado no tienen clases estables por dato — se
-    localizan por el texto de su etiqueta (ej. 'Riesgo les.', 'Titular')."""
+    """Status 'boxes' don't have stable classes per data point — they're
+    located by their label's text instead (e.g. 'Riesgo les.', 'Titular')."""
     for cuadro in soup.select(".cuadro"):
         if pista.lower() in cuadro.get_text(" ", strip=True).lower():
             return cuadro
@@ -119,14 +119,14 @@ def estado_desde_pagina(soup: BeautifulSoup, nombre: str) -> EstadoForma:
 
 
 def puntos_desde_pagina(soup: BeautifulSoup, nombre: str) -> list[PuntoJornada]:
-    """Tabla de puntos por jornada de la ficha del jugador. La página
-    reutiliza el mismo bloque para varios juegos de fantasy (Comunio,
-    Biwenger, Mister...); cada partido trae un <span> por juego con la
-    puntuación ya calculada — se coge solo el de clase "laliga-fantasy"
-    (LaLiga Fantasy Oficial, el juego de este proyecto). Las filas de
-    jornada real tienen atributo data-local ("1"=local, "0"=visitante); las
-    filas de totales agregados (temporada, casa/fuera) no lo tienen, así
-    que ese atributo basta para no confundirlas."""
+    """Per-matchday points table from the player's page. The page reuses
+    the same block for several fantasy games (Comunio, Biwenger, Mister...);
+    each match row carries one <span> per game with its already-computed
+    score — only the one with class "laliga-fantasy" is taken (the
+    official LaLiga Fantasy game, this project's target). Real matchday
+    rows carry a data-local attribute ("1"=home, "0"=away); aggregated
+    total rows (season, home/away) don't, so that attribute alone is
+    enough to avoid confusing the two."""
     filas = []
     for tr in soup.select("tr.plegado.plegable[data-local]"):
         jorn_td = tr.select_one("td.jorn-td")
@@ -164,8 +164,9 @@ def a_filas(estados: list[EstadoForma]) -> list[list]:
 
 
 def _puntos_nuevos(puntos: list[PuntoJornada], ya_guardados: set[tuple[str, str]]) -> list[list]:
-    """Filtra las (jornada, jugador) que `puntos_jornada` ya tiene — la
-    ficha del jugador siempre trae el historial completo, no solo lo nuevo."""
+    """Filters out the (matchday, player) pairs `puntos_jornada` already
+    has — the player's page always brings the full history, not just what's
+    new."""
     return [
         [p.jornada, p.jugador, p.puntos]
         for p in puntos
@@ -198,8 +199,8 @@ def main() -> None:
         append_puntos_jornada(filas_puntos_nuevas)
 
         print(
-            f"OK: estado de forma actualizado para {len(estados)}/{len(nombres)} jugadores seguidos. "
-            f"{len(filas_puntos_nuevas)} filas nuevas en puntos_jornada."
+            f"OK: form status updated for {len(estados)}/{len(nombres)} tracked players. "
+            f"{len(filas_puntos_nuevas)} new rows in puntos_jornada."
         )
     except Exception as err:
         notificar_fallo("scraper_perfil", err)

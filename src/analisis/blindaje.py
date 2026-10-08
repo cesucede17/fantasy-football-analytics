@@ -1,14 +1,14 @@
-"""Riesgo de clausulazo y prioridad de blindaje.
+"""Release-clause risk and shield priority.
 
-riesgo = (valor_mercado - clausula) * P(algún rival tenga saldo suficiente)
+risk = (market_value - release_clause) * P(some rival has enough budget)
 
-El saldo de los rivales se infiere de la pestaña movimientos_liga. Comprobar
-antes que el clausulazo esté activo en la liga (config).
+Rival budgets are inferred from the movimientos_liga tab. Check first that
+the release-clause mechanic is active for this league (config).
 
-Mientras `movimientos_liga` tenga poco histórico, la probabilidad de saldo no
-se puede estimar con precisión por rival — se usa una probabilidad por
-defecto (marcada como tal) en función del número de participantes, hasta que
-haya movimientos reales que ajustarla.
+While movimientos_liga has little history, the probability of a rival
+having enough budget can't be estimated precisely per rival — a default
+probability (explicitly flagged as such) is used based on the number of
+participants, until real transfers are available to calibrate it.
 """
 from __future__ import annotations
 
@@ -25,17 +25,17 @@ class RiesgoBlindaje:
     motivo: str
 
 
-GASTOS = {"compra", "subida_clausula"}  # restan saldo
-INGRESOS = {"venta", "clausulazo"}  # suman saldo (clausulazo = cobrado por el rival)
+GASTOS = {"compra", "subida_clausula"}  # reduce available budget
+INGRESOS = {"venta", "clausulazo"}  # increase available budget (clausulazo = collected by the rival)
 
 
 def saldo_neto_por_manager(movimientos_liga: list[dict]) -> dict[str, float]:
-    """Compras y subidas de cláusula restan saldo; ventas y clausulazos
-    cobrados suman.
+    """Purchases and clause increases reduce budget; sales and collected
+    release-clause payments increase it.
 
-    Aproximado: no conocemos el saldo inicial de cada rival, solo su
-    movimiento neto observado. Sirve para comparar rivales entre sí, no
-    como saldo absoluto.
+    Approximate: we don't know each rival's starting budget, only their
+    observed net movement. Useful to compare rivals against each other, not
+    as an absolute budget figure.
     """
     saldo: dict[str, float] = {}
     for mov in movimientos_liga:
@@ -57,11 +57,11 @@ def calcular_riesgo_blindaje(
     clausulazo_activo: bool = True,
 ) -> RiesgoBlindaje:
     if not clausulazo_activo:
-        return RiesgoBlindaje(0.0, 0.0, False, "Clausulazo desactivado en esta liga.")
+        return RiesgoBlindaje(0.0, 0.0, False, "Release-clause mechanic disabled for this league.")
 
     descuento = max(valor_mercado - clausula, 0)
     if descuento == 0:
-        return RiesgoBlindaje(0.0, 0.0, False, "Cláusula igual o por encima del valor de mercado: sin incentivo.")
+        return RiesgoBlindaje(0.0, 0.0, False, "Clause at or above market value: no incentive to trigger it.")
 
     saldos = saldo_neto_por_manager(movimientos_liga)
 
@@ -70,13 +70,13 @@ def calcular_riesgo_blindaje(
         prob = rivales_con_saldo_ok / len(saldos) if saldos else 0.0
         return RiesgoBlindaje(
             descuento * prob, prob, False,
-            f"Estimado a partir de {len(saldos)} rivales con movimientos registrados.",
+            f"Estimated from {len(saldos)} rivals with recorded transfers.",
         )
 
-    # Sin histórico de movimientos: probabilidad por defecto según nº de rivales.
+    # No transfer history yet: default probability based on rival count.
     n = n_participantes or 1
     prob = 1 - (1 - P_SALDO_INDIVIDUAL_POR_DEFECTO) ** max(n - 1, 0)
     return RiesgoBlindaje(
         descuento * prob, prob, True,
-        "Sin movimientos_liga todavía — probabilidad por defecto, no ajustada a datos reales.",
+        "No movimientos_liga history yet — default probability, not calibrated on real data.",
     )

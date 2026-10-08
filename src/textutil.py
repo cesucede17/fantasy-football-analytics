@@ -1,7 +1,7 @@
-"""Normalización de nombres de jugadores para cruces por texto libre.
+"""Player name normalization for free-text matching.
 
-Compartido entre la app de Streamlit y los scrapers: cualquier sitio que
-necesite comparar un nombre escrito a mano contra uno scrapeado usa esto.
+Shared between the Streamlit app and the scrapers: anywhere a hand-typed
+name needs to be matched against a scraped one uses this.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def normalizar(texto: str) -> str:
 
 
 def slug(texto: str) -> str:
-    """'Lamine Yamal' -> 'lamine-yamal'. Reconstruye la URL de perfil de
-    futbolfantasy.com a partir del nombre — la web no expone esa URL en las
-    filas de la tabla de mercado, solo en páginas de lesionados/sancionados."""
+    """'Lamine Yamal' -> 'lamine-yamal'. Reconstructs futbolfantasy.com's
+    profile URL from the player's name — the site doesn't expose that URL
+    in the market table's rows, only on injury/suspension pages."""
     return re.sub(r"[^a-z0-9]+", "-", normalizar(texto)).strip("-")

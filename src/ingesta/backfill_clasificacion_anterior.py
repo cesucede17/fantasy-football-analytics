@@ -1,18 +1,18 @@
-"""Backfill único: clasificación final de LaLiga 2025/26.
+"""One-off backfill: LaLiga 2025/26 final standings.
 
-No es un scraper que se ejecute a diario — es un dato histórico fijo que no
-cambia, así que se guarda una vez a mano (aquí, como constante) en vez de
-montar infraestructura para volver a por él. Sirve de punto de partida al
-empezar la temporada 2026/27, cuando `calendario_resultados` todavía no
-tiene partidos jugados suficientes para calcular una clasificación real —
-ver `src.analisis.enfrentamientos.tabla_posiciones`.
+Not a scraper that runs daily — it's a fixed historical fact that never
+changes, so it's stored once by hand (here, as a constant) instead of
+building infrastructure to fetch it again. Serves as the starting point at
+the beginning of the 2026/27 season, while `calendario_resultados` doesn't
+yet have enough played matches to compute a real table — see
+`src.analisis.enfrentamientos.tabla_posiciones`.
 
-Nombres de equipo normalizados a como los usa futbolfantasy.com (misma
-fuente que el resto del proyecto), no a los nombres oficiales largos de la
-Wikipedia (de donde sale este dato): "Atlético Madrid" -> "Atlético", etc.
+Team names normalized to how futbolfantasy.com uses them (same source as
+the rest of the project), not Wikipedia's official long-form names (where
+this data comes from): "Atlético Madrid" -> "Atlético", etc.
 
-Fuente: https://en.wikipedia.org/wiki/2025%E2%80%9326_La_Liga (temporada
-ya concluida en el momento de este backfill).
+Source: https://en.wikipedia.org/wiki/2025%E2%80%9326_La_Liga (season
+already finished at the time of this backfill).
 """
 from __future__ import annotations
 
@@ -34,9 +34,9 @@ CLASIFICACION_2025_26 = [
     ("Elche", 15),
     ("Levante", 16),
     ("Osasuna", 17),
-    ("Mallorca", 18),  # descendido
-    ("Girona", 19),  # descendido
-    ("Real Oviedo", 20),  # descendido
+    ("Mallorca", 18),  # relegated
+    ("Girona", 19),  # relegated
+    ("Real Oviedo", 20),  # relegated
 ]
 
 
@@ -48,7 +48,7 @@ def main() -> None:
     from src.storage.sheets import sobrescribir_clasificacion_anterior
 
     sobrescribir_clasificacion_anterior(a_filas())
-    print(f"OK: clasificación 2025/26 guardada ({len(CLASIFICACION_2025_26)} equipos).")
+    print(f"OK: 2025/26 standings saved ({len(CLASIFICACION_2025_26)} teams).")
 
 
 if __name__ == "__main__":

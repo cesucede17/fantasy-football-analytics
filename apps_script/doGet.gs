@@ -1,29 +1,29 @@
 /**
- * Endpoint de lectura para la web (web/). Mismo proyecto de Apps Script que
- * doPost.gs, mismo TOKEN (Project Settings > Script Properties). Hace falta
- * volver a "Implementar > Nueva implementación" después de pegar esto —
- * Apps Script no redespliega solo al guardar.
+ * Read endpoint for the web dashboard (web/). Same Apps Script project as
+ * doPost.gs, same TOKEN (Project Settings > Script Properties). Needs a
+ * fresh "Deploy > New deployment" after pasting this in — Apps Script
+ * doesn't redeploy on save alone.
  *
- * `_autorizado()` y `_json()` son helpers compartidos con doPost.gs.
+ * `_autorizado()` and `_json()` are helpers shared with doPost.gs.
  *
  * Query params:
- *   ?token=...                                   (siempre obligatorio)
- *   ?todo=1                                       -> todas las pestañas de
- *       una vez (menos el histórico completo de precios_diarios, que puede
- *       tener decenas de miles de filas en una temporada — en su lugar se
- *       devuelve solo el snapshot del día más reciente, en `snapshot`).
- *   ?todo=1&hojas=mi_plantilla,estado_forma       -> como ?todo=1 pero solo
- *       esas pestañas (+ snapshot, que siempre se incluye salvo
- *       &snapshot=0) — cada página pide solo lo que usa, en vez de las 10
- *       pestañas siempre; menos datos leídos y menos JSON que mandar.
- *   ?hoja=NOMBRE                                   -> esa pestaña entera.
- *   ?hoja=precios_diarios&jugador_id=X             -> histórico de un jugador
- *       (para la gráfica de precio).
+ *   ?token=...                                   (always required)
+ *   ?todo=1                                       -> every tab at once
+ *       (except precios_diarios's full history, which can run to tens of
+ *       thousands of rows in a season — instead, only the most recent
+ *       day's snapshot is returned, in `snapshot`).
+ *   ?todo=1&hojas=mi_plantilla,estado_forma       -> like ?todo=1 but only
+ *       those tabs (+ snapshot, always included unless &snapshot=0) — each
+ *       page requests only what it uses, instead of all 10 tabs every
+ *       time; less data read and less JSON to send.
+ *   ?hoja=NAME                                   -> that whole tab.
+ *   ?hoja=precios_diarios&jugador_id=X            -> one player's history
+ *       (for the price chart).
  *   ?accion=valor_historico&jugador_id=X&fecha=YYYY-MM-DD
- *       -> valor de mercado de ese jugador ese día, sacado en vivo del
- *       histórico de 30 días de futbolfantasy.com (puerto de
- *       scraper_precios.valor_historico_jugador — el navegador no puede
- *       llamar a ese sitio por CORS, Apps Script sí).
+ *       -> that player's market value on that day, fetched live from
+ *       futbolfantasy.com's 30-day history (a port of
+ *       scraper_precios.valor_historico_jugador — the browser can't call
+ *       that site directly due to CORS, but Apps Script can).
  */
 
 const PESTANAS_TODO = [
@@ -55,16 +55,16 @@ function doGet(e) {
       return _json({ ok: true, filas: _leerHojaSegura(ss, e.parameter.hoja) });
     }
 
-    // !== undefined, no truthy: ?hojas= (vacío, "ninguna pestaña extra,
-    // solo snapshot") es un valor válido y distinto de "no venía hojas=".
+    // !== undefined, not truthy: ?hojas= (empty, "no extra tabs, just the
+    // snapshot") is a valid value, distinct from "hojas= wasn't sent at all".
     const pedidas = e.parameter.hojas !== undefined
       ? PESTANAS_TODO.filter(p => e.parameter.hojas.split(',').includes(p))
       : PESTANAS_TODO;
 
     const datos = {};
     pedidas.forEach(nombre => { datos[nombre] = _leerHojaSegura(ss, nombre); });
-    // config es una sola fila de ajustes, no una lista — se aplana a objeto
-    // plano para que el cliente lea datos.config.saldo directamente.
+    // config is a single row of settings, not a list — flattened into a
+    // plain object so the client can read datos.config.saldo directly.
     if ('config' in datos) datos.config = datos.config[0] || {};
     if (e.parameter.snapshot !== '0') datos.snapshot = _snapshotMasReciente(ss);
     return _json({ ok: true, datos });
@@ -84,11 +84,12 @@ function _json(obj) {
 }
 
 function _valorCelda(valor) {
-  // Sheets auto-detecta como fecha cualquier texto tipo "2026-09-03" escrito
-  // con USER_ENTERED (así escriben los scrapers) — SpreadsheetApp.getValues()
-  // devuelve esas celdas como objeto Date (con hora y huso horario), a
-  // diferencia de gspread en Python, que da el string tal cual. Se normaliza
-  // aquí a "YYYY-MM-DD" para que la web vea lo mismo que siempre vio Python.
+  // Sheets auto-detects any "2026-09-03"-shaped text written with
+  // USER_ENTERED (how the scrapers write) as a date — SpreadsheetApp.getValues()
+  // then returns those cells as a Date object (with time and timezone),
+  // unlike gspread in Python, which returns the string as-is. Normalized
+  // here to "YYYY-MM-DD" so the web dashboard sees the same thing Python
+  // always saw.
   if (Object.prototype.toString.call(valor) === '[object Date]') {
     return Utilities.formatDate(valor, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
@@ -97,7 +98,7 @@ function _valorCelda(valor) {
 
 function _leerHoja(ss, nombre) {
   const hoja = ss.getSheetByName(nombre);
-  if (!hoja) throw new Error('pestaña no encontrada: ' + nombre);
+  if (!hoja) throw new Error('tab not found: ' + nombre);
   const valores = hoja.getDataRange().getValues();
   const cabecera = valores[0];
   return valores.slice(1).map(fila => {
@@ -111,22 +112,22 @@ function _leerHojaSegura(ss, nombre) {
   try {
     return _leerHoja(ss, nombre);
   } catch (err) {
-    return []; // pestaña nueva que todavía no existe (p.ej. antes del primer backfill)
+    return []; // a new tab that doesn't exist yet (e.g. before the first backfill)
   }
 }
 
 function _snapshotMasReciente(ss) {
-  // precios_diarios crece sin parar (un bloque de ~700 filas cada día) y
-  // _leerHoja lee la pestaña entera — con unos meses de temporada esto se
-  // vuelve la parte más lenta, con diferencia, de ?todo=1. El snapshot de
-  // un solo día siempre está al final (append diario), así que basta con
-  // leer la cola de la hoja en vez de todo el histórico.
+  // precios_diarios keeps growing (a ~700-row block every day) and
+  // _leerHoja reads the entire tab — after a few months of season this
+  // becomes by far the slowest part of ?todo=1. A single day's snapshot is
+  // always at the end (daily append), so reading just the tail of the
+  // sheet is enough instead of the whole history.
   const hoja = ss.getSheetByName('precios_diarios');
   if (!hoja) return [];
   const ultimaFila = hoja.getLastRow();
   if (ultimaFila < 2) return [];
 
-  const MARGEN_FILAS = 1500; // ~2x el pool (~700 jugadores), margen de sobra
+  const MARGEN_FILAS = 1500; // ~2x the pool size (~700 players), ample margin
   const inicio = Math.max(2, ultimaFila - MARGEN_FILAS + 1);
   const cabecera = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
   const valores = hoja.getRange(inicio, 1, ultimaFila - inicio + 1, cabecera.length).getValues();

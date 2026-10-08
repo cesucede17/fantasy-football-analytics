@@ -1,28 +1,29 @@
-"""Puntos de LaLiga Fantasy Oficial para el pool ENTERO de jugadores (no solo
-los seguidos en mi_plantilla/watchlist/mercado_diario, a diferencia de
-scraper_perfil.puntos_jornada) — base para el scouting de chollos (paso 4
-del brainstorming de decisión, ver docs/04-bitacora.md).
+"""Official LaLiga Fantasy points for the ENTIRE player pool (not just the
+ones tracked in mi_plantilla/watchlist/mercado_diario, unlike
+scraper_perfil.puntos_jornada) — the base data for bargain scouting
+(decision brainstorm step 4, see docs/04-bitacora.md).
 
-Fuente: futbolfantasy.com/analytics/laliga-fantasy/puntos — mismo patrón que
-scraper_precios.py (una sola página, cada jugador es un `<tr
-class="elemento_jugador">` con los datos ya calculados como atributos data-*,
-servido en HTML sin necesitar ejecutar JS). Una petición al día para los
-~525 jugadores del pool, dentro de las reglas de scraping de CLAUDE.md.
+Source: futbolfantasy.com/analytics/laliga-fantasy/puntos — same pattern as
+scraper_precios.py (a single page, each player is a `<tr
+class="elemento_jugador">` with the data already computed as data-*
+attributes, server-rendered HTML, no JS execution needed). One request per
+day for the ~525 players in the pool, within CLAUDE.md's scraping rules.
 
-A propósito NO se usa el `data-ratio` (Valor/Punto) que ya trae la propia
-página: se prefiere recalcular "puntos por millón" en el cliente a partir
-de precios_diarios (mismo valor de mercado que ya usa el resto de la web,
-misma fórmula que estadisticas.js) en vez de fiarse de una definición ajena
-de "valor" que podría no coincidir con la que ya usamos (¿de compra? ¿de
-cláusula? ¿de hoy?). Por eso esta pestaña solo guarda puntos, no valor.
+The page's own `data-ratio` (value/point) is deliberately NOT used: it's
+preferable to recompute "points per million" client-side from
+precios_diarios (the same market value already used by the rest of the
+dashboard, the same formula as estadisticas.js) rather than trust someone
+else's definition of "value" that might not match the one already in use
+(purchase price? release clause? today's value?). That's why this tab only
+stores points, not value.
 
-Solo trae puntos de TEMPORADA y de los últimos 3/5 partidos — a diferencia
-de puntos_jornada, no hay desglose jornada a jornada aquí (esta fuente no
-lo ofrece a nivel de pool completo, solo en la ficha individual). Son dos
-fuentes complementarias, no una sustituye a la otra.
+Only carries SEASON points and the last 3/5 matches — unlike
+puntos_jornada, there's no matchday-by-matchday breakdown here (this source
+doesn't offer that at the full-pool level, only on the individual player
+page). These are two complementary sources, neither replaces the other.
 
-Es una foto del estado actual (como estado_forma), no histórico
-acumulativo: cada pasada sobrescribe la pestaña entera.
+This is a snapshot of current status (like estado_forma), not a cumulative
+history: every run overwrites the whole tab.
 """
 from __future__ import annotations
 
@@ -35,8 +36,8 @@ from bs4 import BeautifulSoup
 URL_PUNTOS_POOL = "https://www.futbolfantasy.com/analytics/laliga-fantasy/puntos"
 
 USER_AGENT = (
-    "FantasyLaligaBot/1.0 (uso personal, 1 peticion/dia; "
-    "contacto: suelacesar17@gmail.com)"
+    "FantasyLaligaBot/1.0 (personal use, 1 request/day; "
+    "contact: suelacesar17@gmail.com)"
 )
 
 
@@ -87,19 +88,19 @@ def _decimal(fila, atributo: str) -> float:
 
 
 def obtener_puntos_pool() -> list[PuntosJugadorPool]:
-    """Descarga y parsea la página de puntos. Una petición, nada más."""
+    """Downloads and parses the points page. One request, nothing more."""
     resp = requests.get(URL_PUNTOS_POOL, headers={"User-Agent": USER_AGENT}, timeout=30)
     resp.raise_for_status()
 
-    # Igual que scraper_precios: pasar bytes crudos para que BeautifulSoup
-    # detecte bien el UTF-8 real a partir del <meta charset>, en vez del
-    # Latin-1 que asume requests cuando el servidor no declara charset.
+    # Same as scraper_precios: pass raw bytes so BeautifulSoup correctly
+    # detects the real UTF-8 encoding from <meta charset>, instead of the
+    # Latin-1 requests assumes when the server doesn't declare a charset.
     soup = BeautifulSoup(resp.content, "lxml")
     filas = soup.select("tr.elemento_jugador")
     if not filas:
         raise RuntimeError(
-            "No se encontraron filas de jugadores — la web pudo haber cambiado "
-            "su estructura. Revisar scraper_puntos_pool.py."
+            "No player rows found — the site may have changed its "
+            "structure. Check scraper_puntos_pool.py."
         )
 
     fecha = dt.date.today().isoformat()
@@ -134,8 +135,8 @@ def main() -> None:
     try:
         datos = obtener_puntos_pool()
         sobrescribir_pool_puntos(a_filas(datos))
-        print(f"OK: {len(datos)} jugadores escritos en pool_puntos.")
-    except Exception as err:  # noqa: BLE001 — sí, capturamos todo: es el job diario.
+        print(f"OK: {len(datos)} players written to pool_puntos.")
+    except Exception as err:  # noqa: BLE001 — yes, we catch everything: it's the daily job.
         notificar_fallo("scraper_puntos_pool", err)
         raise
 

@@ -1,7 +1,9 @@
-# Fantasy Football Decision Support
+# Financial Decision Support Under Uncertainty
 
-> A semi-automated decision-support system for a Spanish football fantasy game: it watches
-> prices, the transfer market, opponents, and news, and sends alerts — the human still makes
+> A personal project applying financial decision-making under uncertainty — pricing an asset
+> under competitive bidding, deciding when to exit a position, and quantifying risk exposure — to
+> a real, fast-moving testbed: the daily player market of a football fantasy game. It watches
+> prices, the transfer market, competitors, and news, and sends alerts; a human still executes
 > every move by hand, in the game's own app.
 
 <p align="center">
@@ -17,12 +19,14 @@
 
 ## Problem → Solution → Result
 
-**Problem.** The game has a daily rotating transfer market with sealed first-price bidding, a
-release-clause mechanic any rival can trigger, and a shield that temporarily blocks it — and the
-single most valuable signal (what rivals are actually buying, selling, and paying) isn't
-available anywhere, isn't recoverable retroactively, and has to be captured as it happens.
-Deciding *how much to bid*, *when to sell*, and *who to shield* by gut feeling leaves real value
-on the table.
+**Problem.** Every day, this market poses the same three decisions any trader or portfolio
+manager faces, just compressed into hours instead of weeks: **how much to bid** for an asset
+under sealed, competitive, first-price bidding; **when to exit** a position you already hold;
+and **how to size risk** against a counterparty who can force a sale at a fixed price (a
+release-clause mechanic any rival can trigger). The single most valuable signal — what
+competitors are actually paying, not just asking — isn't published anywhere and isn't
+recoverable after the fact; it has to be captured as it happens. Deciding by gut feeling leaves
+real value on the table.
 
 **Solution.** A pipeline that scrapes public football-data sites daily (prices, news, fixtures,
 injuries/suspensions), stores it in Google Sheets (for manual entry from a phone) and SQLite (for
@@ -94,16 +98,22 @@ flowchart TB
 
 ## Decision modules
 
-- **`puja.py`** — bid pricing. You're not bidding against the market value, you're bidding
-  against your rivals; the quantity being modeled is the *overpay* (`winning_bid / market_value -
-  1`), driven by positional scarcity and recent price momentum.
-- **`venta.py`** — sell/hold. Sell when the expected 3-5 day price trend turns negative, not
-  because a player is expensive — expensive and still rising means hold.
-- **`blindaje.py`** — shield priority. `risk = (market_value - release_clause) × P(some rival has
-  enough budget)`, with rival budgets inferred from observed league transfer history (falls back
-  to a clearly-labeled default probability when there isn't enough history yet).
-- **`chollos.py`** — bargain scouting: points-per-value ranking by position, with a minimum
-  sample-size floor so a cheap player with one lucky match doesn't look like a steal.
+Each module targets one financial decision, applied to this market:
+
+- **`puja.py`** — **bid pricing under competitive first-price sealed bidding.** You're not
+  bidding against the market value, you're bidding against your rivals; the quantity being
+  modeled is the *overpay* (`winning_bid / market_value - 1`), driven by positional scarcity and
+  recent price momentum — the same shape of problem as pricing a bid in any first-price auction.
+- **`venta.py`** — **exit timing.** Sell when the expected 3-5 day price trend turns negative,
+  not because the asset is expensive — expensive and still rising means hold. A trend-following
+  exit rule, not a price-level rule.
+- **`blindaje.py`** — **counterparty risk sizing.** `risk = (market_value - release_clause) ×
+  P(some rival has enough budget)` — an expected-loss calculation, with each rival's budget
+  inferred from observed transfer history (falls back to a clearly-labeled default probability
+  when there isn't enough history yet).
+- **`chollos.py`** — **value screening.** Points-per-value ranking by position, with a minimum
+  sample-size floor so a cheap asset with one lucky outcome doesn't look undervalued by noise
+  alone.
 - **`enfrentamientos.py`** — a transparent, manually-weighted (not statistically fitted) estimate
   of win probability for lineup decisions, combining head-to-head history, home advantage, recent
   form, league position, and injury/suspension news — always shown with its full signal breakdown,
